@@ -1,8 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
-  getFirestore, collection, doc, setDoc, getDoc, 
-  onSnapshot, query, addDoc, updateDoc, deleteDoc 
+  getFirestore, collection, onSnapshot, addDoc 
 } from 'firebase/firestore';
 import { 
   getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged 
@@ -13,8 +12,17 @@ import {
   Filter, TrendingUp, Sparkles, Loader2, X, Database
 } from 'lucide-react';
 
+/**
+ * NOTA DE DEPLOY:
+ * O erro 127 no Vercel sugere que o pacote 'react-scripts' ou 'firebase' 
+ * não está listado nas suas dependências do package.json.
+ */
+
 // Configurações globais fornecidas pelo ambiente
-const firebaseConfig = JSON.parse(__firebase_config);
+const firebaseConfig = typeof __firebase_config !== 'undefined' 
+  ? JSON.parse(__firebase_config) 
+  : { apiKey: "fallback", authDomain: "fallback", projectId: "fallback" };
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -57,7 +65,7 @@ const App = () => {
   useEffect(() => {
     if (!user) return;
 
-    // Caminho público para dados compartilhados entre monitores (RULE 1)
+    // Caminho público (RULE 1)
     const atendimentosCol = collection(db, 'artifacts', appId, 'public', 'data', 'atendimentos');
     const projetosCol = collection(db, 'artifacts', appId, 'public', 'data', 'projetos');
 
@@ -67,7 +75,10 @@ const App = () => {
         setAtendimentos(data);
         setLoading(false);
       },
-      (error) => console.error("Erro ao buscar atendimentos:", error)
+      (error) => {
+        console.error("Erro ao buscar atendimentos:", error);
+        setLoading(false);
+      }
     );
 
     const unsubProjetos = onSnapshot(projetosCol, 
@@ -87,28 +98,35 @@ const App = () => {
   // --- ACTIONS ---
   const addAtendimentoRapido = async () => {
     if (!user) return;
-    const novo = {
-      data: new Date().toISOString().split('T')[0],
-      aluno: "Novo Aluno",
-      grupo: "G01",
-      duvida: "Dúvida registrada via sistema",
-      tempo: 15,
-      dificuldade: "Média",
-      tipo: "Presencial",
-      ods: "ODS Geral"
-    };
-    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'atendimentos'), novo);
+    try {
+      const novo = {
+        data: new Date().toISOString().split('T')[0],
+        aluno: "Novo Aluno",
+        grupo: "G01",
+        duvida: "Dúvida registada via sistema",
+        tempo: 15,
+        dificuldade: "Média",
+        tipo: "Presencial",
+        ods: "ODS Geral"
+      };
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'atendimentos'), novo);
+    } catch (e) {
+      console.error("Erro ao salvar:", e);
+    }
   };
 
   // --- GEMINI API ---
   const callGemini = async (prompt) => {
-    const apiKey = ""; 
+    const apiKey = ""; // Chave fornecida pelo ambiente
     const baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
+    
     const response = await fetch(`${baseUrl}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
     });
+    
+    if (!response.ok) throw new Error("Falha na API");
     const data = await response.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text;
   };
@@ -118,10 +136,10 @@ const App = () => {
     setShowAiModal(true);
     setAiResult(null);
     try {
-      const res = await callGemini(`Sugira uma explicação técnica para a dúvida: ${at.duvida}. Contexto: Banco de Dados.`);
+      const res = await callGemini(`Sugira uma explicação técnica para a dúvida: ${at.duvida}. Contexto: Monitoria de Banco de Dados.`);
       setAiResult(res);
     } catch (e) {
-      setAiResult("Erro ao consultar IA.");
+      setAiResult("Ocorreu um erro ao consultar a IA. Verifique as configurações de rede.");
     } finally {
       setAiLoading(false);
     }
@@ -130,7 +148,7 @@ const App = () => {
   // --- CALCULATIONS ---
   const kpis = useMemo(() => {
     const total = atendimentos.length;
-    const groups = new Set(projetos.map(p => p.id)).size;
+    const groups = new Set(projetos.map(p => p.id)).size || 0;
     const progressoTotal = projetos.length > 0 
       ? projetos.reduce((acc, p) => acc + ((p.mer + p.relacional + p.sql) / 3), 0) / projetos.length 
       : 0;
@@ -141,80 +159,100 @@ const App = () => {
   if (loading && !user) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-slate-50">
-        <Loader2 className="animate-spin text-indigo-600" size={40} />
+        <div className="text-center">
+          <Loader2 className="animate-spin text-indigo-600 mb-4 mx-auto" size={40} />
+          <p className="text-slate-500 font-medium">A ligar ao Firebase...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-900">
-      {/* Sidebar e Modal permanecem similares, mas com lógica de dados reais */}
       <aside className="w-64 bg-white border-r border-slate-200 p-6 flex flex-col">
         <div className="flex items-center space-x-2 mb-10">
           <div className="bg-indigo-600 p-2 rounded-lg"><BookOpen className="text-white" size={20} /></div>
-          <h1 className="text-lg font-bold text-slate-800">MONITORIA CLOUD</h1>
+          <h1 className="text-lg font-bold text-slate-800 tracking-tight">MONITORIA CLOUD</h1>
         </div>
         <nav className="space-y-2 flex-1">
-          <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}><LayoutDashboard size={18}/> Dashboard</button>
-          <button onClick={() => setActiveTab('atendimentos')} className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg ${activeTab === 'atendimentos' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}><MessageSquare size={18}/> Atendimentos</button>
-          <button onClick={() => setActiveTab('projetos')} className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg ${activeTab === 'projetos' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}><Database size={18}/> Projetos</button>
+          <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}><LayoutDashboard size={18}/> Dashboard</button>
+          <button onClick={() => setActiveTab('atendimentos')} className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all ${activeTab === 'atendimentos' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}><MessageSquare size={18}/> Atendimentos</button>
+          <button onClick={() => setActiveTab('projetos')} className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all ${activeTab === 'projetos' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}><Database size={18}/> Projetos</button>
         </nav>
-        <div className="mt-auto p-3 bg-indigo-50 rounded-xl">
-          <p className="text-[10px] font-bold text-indigo-400 uppercase">Usuário Autenticado</p>
+        <div className="mt-auto p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+            <p className="text-[10px] font-bold text-indigo-400 uppercase">Ligado</p>
+          </div>
           <p className="text-xs font-mono text-indigo-700 truncate">{user?.uid}</p>
         </div>
       </aside>
 
       <main className="flex-1 overflow-y-auto p-8">
         <header className="flex justify-between items-center mb-8">
-          <h2 className="text-2xl font-bold text-slate-800 capitalize">{activeTab}</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-slate-800 capitalize">{activeTab}</h2>
+            <p className="text-sm text-slate-400">Sistema de Gestão de Dados em Tempo Real</p>
+          </div>
           <button 
             onClick={addAtendimentoRapido}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition"
+            className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 active:scale-95"
           >
-            <Plus size={18} /> Novo Registro Real
+            <Plus size={18} /> Novo Atendimento
           </button>
         </header>
 
         {activeTab === 'dashboard' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <div className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100">
+              <div className="bg-blue-50 text-blue-600 w-10 h-10 rounded-xl flex items-center justify-center mb-4"><MessageSquare size={20}/></div>
               <p className="text-slate-400 text-xs font-bold uppercase mb-1">Total Atendimentos</p>
               <p className="text-3xl font-black text-slate-800">{kpis.total}</p>
             </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <div className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100">
+              <div className="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center mb-4"><Users size={20}/></div>
               <p className="text-slate-400 text-xs font-bold uppercase mb-1">Grupos Ativos</p>
               <p className="text-3xl font-black text-slate-800">{kpis.groups}</p>
             </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-              <p className="text-slate-400 text-xs font-bold uppercase mb-1">Progresso Geral</p>
-              <p className="text-3xl font-black text-indigo-600">{kpis.progresso}%</p>
+            <div className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100">
+              <div className="bg-green-50 text-green-600 w-10 h-10 rounded-xl flex items-center justify-center mb-4"><TrendingUp size={20}/></div>
+              <p className="text-slate-400 text-xs font-bold uppercase mb-1">Progresso Médio</p>
+              <p className="text-3xl font-black text-green-600">{kpis.progresso}%</p>
             </div>
           </div>
         )}
 
         {activeTab === 'atendimentos' && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
             <table className="w-full text-left">
-              <thead className="bg-slate-50 text-slate-400 text-xs font-bold uppercase">
+              <thead className="bg-slate-50 text-slate-400 text-xs font-bold uppercase tracking-wider">
                 <tr>
-                  <th className="p-4">Data</th>
-                  <th className="p-4">Aluno</th>
-                  <th className="p-4">Dúvida</th>
-                  <th className="p-4 text-right">IA</th>
+                  <th className="p-5">Data</th>
+                  <th className="p-5">Aluno / Grupo</th>
+                  <th className="p-5">Dúvida Técnica</th>
+                  <th className="p-5 text-right">Assistência IA</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 text-sm">
                 {atendimentos.length === 0 ? (
-                  <tr><td colSpan="4" className="p-8 text-center text-slate-400">Nenhum dado salvo no banco ainda.</td></tr>
+                  <tr><td colSpan="4" className="p-10 text-center text-slate-400 font-medium italic">A aguardar dados do servidor...</td></tr>
                 ) : (
                   atendimentos.map(at => (
-                    <tr key={at.id} className="hover:bg-slate-50">
-                      <td className="p-4 text-sm text-slate-500">{at.data}</td>
-                      <td className="p-4 font-bold">{at.aluno} <span className="text-xs text-indigo-500">[{at.grupo}]</span></td>
-                      <td className="p-4 text-sm text-slate-600">{at.duvida}</td>
-                      <td className="p-4 text-right">
-                        <button onClick={() => handleAiConsult(at)} className="text-indigo-600 hover:text-indigo-800"><Sparkles size={18}/></button>
+                    <tr key={at.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-5 text-slate-500 font-medium">{at.data}</td>
+                      <td className="p-5">
+                        <p className="font-bold text-slate-800">{at.aluno}</p>
+                        <p className="text-[10px] text-indigo-500 font-black uppercase tracking-widest">{at.grupo}</p>
+                      </td>
+                      <td className="p-5 text-slate-600 max-w-md">{at.duvida}</td>
+                      <td className="p-5 text-right">
+                        <button 
+                          onClick={() => handleAiConsult(at)} 
+                          className="bg-indigo-50 text-indigo-600 p-2 rounded-lg hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                          title="Consultar Gemini"
+                        >
+                          <Sparkles size={18}/>
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -226,14 +264,36 @@ const App = () => {
 
         {/* Modal de IA */}
         {showAiModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
-              <div className="bg-indigo-600 p-4 text-white flex justify-between items-center">
-                <span className="font-bold flex items-center gap-2"><Sparkles size={18}/> Resposta do Gemini</span>
-                <button onClick={() => setShowAiModal(false)}><X size={20}/></button>
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-6 z-50 animate-in fade-in duration-300">
+            <div className="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="bg-indigo-600 p-5 text-white flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-2 rounded-lg"><Sparkles size={20}/></div>
+                  <span className="font-bold text-lg">Sugestão do Assistente ✨</span>
+                </div>
+                <button onClick={() => setShowAiModal(false)} className="hover:bg-white/20 p-1.5 rounded-full transition"><X size={22}/></button>
               </div>
-              <div className="p-6">
-                {aiLoading ? <div className="flex justify-center p-8"><Loader2 className="animate-spin text-indigo-600"/></div> : <p className="text-slate-700 text-sm leading-relaxed">{aiResult}</p>}
+              <div className="p-8 max-h-[60vh] overflow-y-auto">
+                {aiLoading ? (
+                  <div className="flex flex-col items-center justify-center py-10">
+                    <Loader2 className="animate-spin text-indigo-600 mb-4" size={32}/>
+                    <p className="text-slate-400 font-medium">A processar conhecimentos de SQL...</p>
+                  </div>
+                ) : (
+                  <div className="prose prose-indigo">
+                    <p className="text-slate-700 leading-relaxed whitespace-pre-wrap font-medium">
+                      {aiResult}
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button 
+                  onClick={() => setShowAiModal(false)}
+                  className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 transition"
+                >
+                  Fechar
+                </button>
               </div>
             </div>
           </div>
