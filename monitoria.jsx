@@ -13,15 +13,24 @@ import {
 } from 'lucide-react';
 
 /**
- * NOTA DE DEPLOY:
- * O erro 127 no Vercel sugere que o pacote 'react-scripts' ou 'firebase' 
- * não está listado nas suas dependências do package.json.
+ * CONFIGURAÇÃO PARA DEPLOY (VERCEL/NETLIFY):
+ * 1. Preset no Vercel: "Create React App"
+ * 2. Certifique-se de que o ficheiro 'package.json' existe na raiz.
+ * 3. As dependências necessárias são: firebase e lucide-react.
  */
 
 // Configurações globais fornecidas pelo ambiente
+// No Vercel, estas variáveis devem ser configuradas em 'Environment Variables'
 const firebaseConfig = typeof __firebase_config !== 'undefined' 
   ? JSON.parse(__firebase_config) 
-  : { apiKey: "fallback", authDomain: "fallback", projectId: "fallback" };
+  : { 
+      apiKey: "SUA_API_KEY", 
+      authDomain: "SEU_PROJECT_ID.firebaseapp.com", 
+      projectId: "SEU_PROJECT_ID",
+      storageBucket: "SEU_PROJECT_ID.appspot.com",
+      messagingSenderId: "ID",
+      appId: "ID"
+    };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -43,7 +52,7 @@ const App = () => {
   const [aiResult, setAiResult] = useState(null);
   const [showAiModal, setShowAiModal] = useState(false);
 
-  // --- AUTHENTICATION (RULE 3) ---
+  // --- AUTHENTICATION ---
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -61,11 +70,10 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // --- FIRESTORE DATA FETCHING (RULE 1 & 2) ---
+  // --- FIRESTORE DATA FETCHING ---
   useEffect(() => {
     if (!user) return;
 
-    // Caminho público (RULE 1)
     const atendimentosCol = collection(db, 'artifacts', appId, 'public', 'data', 'atendimentos');
     const projetosCol = collection(db, 'artifacts', appId, 'public', 'data', 'projetos');
 
@@ -117,7 +125,7 @@ const App = () => {
 
   // --- GEMINI API ---
   const callGemini = async (prompt) => {
-    const apiKey = ""; // Chave fornecida pelo ambiente
+    const apiKey = ""; 
     const baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
     
     const response = await fetch(`${baseUrl}?key=${apiKey}`, {
@@ -172,19 +180,19 @@ const App = () => {
       <aside className="w-64 bg-white border-r border-slate-200 p-6 flex flex-col">
         <div className="flex items-center space-x-2 mb-10">
           <div className="bg-indigo-600 p-2 rounded-lg"><BookOpen className="text-white" size={20} /></div>
-          <h1 className="text-lg font-bold text-slate-800 tracking-tight">MONITORIA CLOUD</h1>
+          <h1 className="text-lg font-bold text-slate-800 tracking-tight text-center">MONITORIA CLOUD</h1>
         </div>
         <nav className="space-y-2 flex-1">
           <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}><LayoutDashboard size={18}/> Dashboard</button>
           <button onClick={() => setActiveTab('atendimentos')} className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all ${activeTab === 'atendimentos' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}><MessageSquare size={18}/> Atendimentos</button>
           <button onClick={() => setActiveTab('projetos')} className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all ${activeTab === 'projetos' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}><Database size={18}/> Projetos</button>
         </nav>
-        <div className="mt-auto p-4 bg-indigo-50 rounded-xl border border-indigo-100">
-          <div className="flex items-center gap-2 mb-2">
+        <div className="mt-auto p-4 bg-indigo-50 rounded-xl border border-indigo-100 text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-            <p className="text-[10px] font-bold text-indigo-400 uppercase">Ligado</p>
+            <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-tighter">Sincronizado</p>
           </div>
-          <p className="text-xs font-mono text-indigo-700 truncate">{user?.uid}</p>
+          <p className="text-[10px] font-mono text-indigo-300 truncate">{user?.uid}</p>
         </div>
       </aside>
 
@@ -192,7 +200,7 @@ const App = () => {
         <header className="flex justify-between items-center mb-8">
           <div>
             <h2 className="text-2xl font-bold text-slate-800 capitalize">{activeTab}</h2>
-            <p className="text-sm text-slate-400">Sistema de Gestão de Dados em Tempo Real</p>
+            <p className="text-sm text-slate-400">Dados persistidos no Firestore</p>
           </div>
           <button 
             onClick={addAtendimentoRapido}
@@ -206,17 +214,17 @@ const App = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100">
               <div className="bg-blue-50 text-blue-600 w-10 h-10 rounded-xl flex items-center justify-center mb-4"><MessageSquare size={20}/></div>
-              <p className="text-slate-400 text-xs font-bold uppercase mb-1">Total Atendimentos</p>
+              <p className="text-slate-400 text-xs font-bold uppercase mb-1 tracking-tight">Total Atendimentos</p>
               <p className="text-3xl font-black text-slate-800">{kpis.total}</p>
             </div>
             <div className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100">
               <div className="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center mb-4"><Users size={20}/></div>
-              <p className="text-slate-400 text-xs font-bold uppercase mb-1">Grupos Ativos</p>
+              <p className="text-slate-400 text-xs font-bold uppercase mb-1 tracking-tight">Grupos Ativos</p>
               <p className="text-3xl font-black text-slate-800">{kpis.groups}</p>
             </div>
             <div className="bg-white p-7 rounded-3xl shadow-sm border border-slate-100">
               <div className="bg-green-50 text-green-600 w-10 h-10 rounded-xl flex items-center justify-center mb-4"><TrendingUp size={20}/></div>
-              <p className="text-slate-400 text-xs font-bold uppercase mb-1">Progresso Médio</p>
+              <p className="text-slate-400 text-xs font-bold uppercase mb-1 tracking-tight">Progresso Médio</p>
               <p className="text-3xl font-black text-green-600">{kpis.progresso}%</p>
             </div>
           </div>
@@ -229,13 +237,13 @@ const App = () => {
                 <tr>
                   <th className="p-5">Data</th>
                   <th className="p-5">Aluno / Grupo</th>
-                  <th className="p-5">Dúvida Técnica</th>
+                  <th className="p-5">Dúvida</th>
                   <th className="p-5 text-right">Assistência IA</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
                 {atendimentos.length === 0 ? (
-                  <tr><td colSpan="4" className="p-10 text-center text-slate-400 font-medium italic">A aguardar dados do servidor...</td></tr>
+                  <tr><td colSpan="4" className="p-10 text-center text-slate-400 font-medium italic">Sem registos. Adicione um novo atendimento acima.</td></tr>
                 ) : (
                   atendimentos.map(at => (
                     <tr key={at.id} className="hover:bg-slate-50 transition-colors">
@@ -264,8 +272,8 @@ const App = () => {
 
         {/* Modal de IA */}
         {showAiModal && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-6 z-50 animate-in fade-in duration-300">
-            <div className="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-6 z-50">
+            <div className="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl">
               <div className="bg-indigo-600 p-5 text-white flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="bg-white/20 p-2 rounded-lg"><Sparkles size={20}/></div>
@@ -277,10 +285,10 @@ const App = () => {
                 {aiLoading ? (
                   <div className="flex flex-col items-center justify-center py-10">
                     <Loader2 className="animate-spin text-indigo-600 mb-4" size={32}/>
-                    <p className="text-slate-400 font-medium">A processar conhecimentos de SQL...</p>
+                    <p className="text-slate-400 font-medium">A analisar conhecimentos de BD...</p>
                   </div>
                 ) : (
-                  <div className="prose prose-indigo">
+                  <div className="prose prose-indigo max-w-none">
                     <p className="text-slate-700 leading-relaxed whitespace-pre-wrap font-medium">
                       {aiResult}
                     </p>
